@@ -1,1 +1,1 @@
-# news_tg_maker
+# CreditComiteeBot

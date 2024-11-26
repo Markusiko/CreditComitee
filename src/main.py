@@ -1,22 +1,28 @@
-from langchain_gigachat import GigaChatEmbeddings
-from langchain_gigachat import GigaChat
+from langchain_gigachat import GigaChat, GigaChatEmbeddings
 from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain import hub
-from langchain.agents import create_tool_calling_agent
-from langchain.agents import AgentExecutor
+from langchain.agents import create_tool_calling_agent, AgentExecutor
 from typing import Annotated
-from utils import print_md, log_output_to_telegram
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import SystemMessage, HumanMessage
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from telegram import Update, Bot
-import asyncio
 import os
+import re
+
+
+def escape_markdown_v2(text: str) -> str:
+    """
+    Экранирует все специальные символы для MarkdownV2 в Telegram.
+    """
+    special_chars = r'_*[]()~`>#+-=|{}.!'
+    # Экранируем каждый символ с помощью обратного слэша
+    return re.sub(r'([%s])' % re.escape(special_chars), r'\\\1', text)
 
 
 # DEAL_INFO = input()
@@ -99,30 +105,36 @@ system_prompt_decision_making = '''\
 
 
 async def top_manager(state: State):
-    message = llm.invoke(state["messages"])  # Получаем результат LLM
+    if state["num_qs"] > 5:
+        return {"messages": state["messages"]}
+
+    message = llm.invoke(state["messages"])
     state["messages"].append(message)
 
-    # Отправляем результат в Telegram
     bot = state["bot"]
     chat_id = state["chat_id"]
-    await bot.send_message(chat_id=chat_id, text=f"Топ-менеджер: {message.content}")
+
+    # md_text = message.content.copy()
+    # md_text = md_text
+    await bot.send_message(chat_id=chat_id,
+                           text=f"*Топ-менеджер:* {message.content}",
+                           parse_mode='Markdown'
+                           )
 
     return {"messages": state["messages"], "num_qs": state["num_qs"] + 1}
 
 
 async def ask_or_end(state: State):
-    if state['num_qs'] > 10:
-        return 'make_decision'
 
     query = state["messages"][-1].content
     bot = state["bot"]
     chat_id = state["chat_id"]
 
     if '?' in query:
-        # await bot.send_message(chat_id=chat_id, text=f"Заданный вопрос: {query}")
         return 'ask_assistant'
     else:
-        await bot.send_message(chat_id=chat_id, text="Переход к принятию решения.")
+        await bot.send_message(chat_id=chat_id, text="*Переход к принятию решения*",
+                               parse_mode='MarkdownV2')
         return 'make_decision'
 
 
@@ -130,11 +142,11 @@ async def ask_assistant(state: State):
     query = state["messages"][-1].content
     answer = assistant_executor.invoke({"input": query})
 
-    message = f"Ответ помощника: {answer['output']}"
+    message = f"*Ответ помощника:* {answer['output']}"
     bot = state["bot"]
     chat_id = state["chat_id"]
 
-    await bot.send_message(chat_id=chat_id, text=message)
+    await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
     state["messages"].append(HumanMessage(message))
 
     return {"messages": state["messages"]}
@@ -145,17 +157,23 @@ async def make_decision(state: State):
                              + state["messages"][1:])
     messages_for_desision.append(HumanMessage(
         'Сделай заключение по клиенту (одобрять кредит или нет), '
-        'обоснуй свой выбор, указывай все пункты в формате списка и в конце Решение'))
+        'обоснуй свой выбор, указывай все пункты в формате списка. '
+        # 'Пиши официально и формально. Сначала укажи основные факты, затем напиши свое решение.'
+    ))
     decision = llm.invoke(messages_for_desision)
+    decision_text = decision.content
+    decision_text.replace('**', '*')
 
     bot = state["bot"]
     chat_id = state["chat_id"]
 
-    await bot.send_message(chat_id=chat_id, text=f"Итоговое решение:\n{decision.content}")
+    await bot.send_message(chat_id=chat_id,
+                           text='*Итоговое решение:*\n' + decision_text,
+                           parse_mode='Markdown'
+                           )
     return {"messages": [decision]}
 
 
-# В графе вызываем асинхронные функции
 graph_builder = StateGraph(State)
 graph_builder.add_node("top_manager", top_manager)
 graph_builder.add_node("ask_assistant", ask_assistant)
@@ -172,11 +190,10 @@ graph_builder.add_edge("make_decision", END)
 graph = graph_builder.compile()
 
 
-# Обработчик сообщений Telegram
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
-    # Инициализируем состояние графа
+    # начальное состояние графа
     state = {
         "messages": prompts_top_manager,
         "num_qs": 0,
@@ -186,8 +203,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["state"] = state
 
     await update.message.reply_text("Здравствуйте! Введите параметры сделки, чтобы увидеть решение."
-                                    "\nПример: Компания Озон хочет взять кредит на 300 миллионов рублей"
-                                    )
+                                    "\nПример: Компания Озон хочет взять кредит на 300 миллионов рублей")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -196,7 +212,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Пожалуйста, начните с команды /start.")
         return
 
-    # Убедимся, что все необходимые ключи присутствуют
+    # убедимся, что все необходимые ключи присутствуют
     required_keys = ["messages", "num_qs", "bot", "chat_id"]
     for key in required_keys:
         if key not in state:
@@ -206,7 +222,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_input = update.message.text
     state["messages"].append(HumanMessage(user_input))
 
-    # Запуск графа
+    # запуск графа
     await graph.ainvoke(state)
 
 
