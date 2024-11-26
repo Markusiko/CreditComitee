@@ -119,7 +119,7 @@ async def ask_or_end(state: State):
     chat_id = state["chat_id"]
 
     if '?' in query:
-        await bot.send_message(chat_id=chat_id, text=f"Заданный вопрос: {query}")
+        # await bot.send_message(chat_id=chat_id, text=f"Заданный вопрос: {query}")
         return 'ask_assistant'
     else:
         await bot.send_message(chat_id=chat_id, text="Переход к принятию решения.")
@@ -185,7 +185,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     context.user_data["state"] = state
 
-    await update.message.reply_text("Привет! Я готов помочь. Задайте вопрос.")
+    await update.message.reply_text("Здравствуйте! Введите параметры сделки, чтобы увидеть решение."
+                                    "\nПример: Компания Озон хочет взять кредит на 300 миллионов рублей"
+                                    )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
