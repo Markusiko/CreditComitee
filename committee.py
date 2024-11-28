@@ -37,7 +37,7 @@ llm = GigaChat(verify_ssl_certs=False, model='GigaChat-Pro', scope="GIGACHAT_API
 embeddings = GigaChatEmbeddings(verify_ssl_certs=False, scope="GIGACHAT_API_PERS")
 
 vector_store = FAISS.load_local(
-    "./data/faiss_comitee_bot", embeddings, allow_dangerous_deserialization=True
+    "./data/faiss_committee_bot", embeddings, allow_dangerous_deserialization=True
 )
 
 # делаем ретривер и тул
@@ -71,8 +71,8 @@ for agent_name in agents_names:
     agents_dict[agent_name] = agent_executor
 
 # пердседатель комитета
-prompts_comitee_head = [
-    SystemMessage(prompts_dict['system_comitee_head']),
+prompts_committee_head = [
+    SystemMessage(prompts_dict['system_committee_head']),
 ]
 
 
@@ -84,7 +84,7 @@ class State(TypedDict):
     chat_id: int
 
 
-async def comitee_head(state: State):
+async def committee_head(state: State):
     """
     Председатель говорит, что делать дальше
     """
@@ -100,12 +100,12 @@ async def router(state: State):
     """
     Определяем, куда идет диалог (вопрос участнику комитета / принятие решения)
     """
-    comitee_head_message = state["messages"][-1].content
+    committee_head_message = state["messages"][-1].content
     bot = state["bot"]
     chat_id = state["chat_id"]
 
     try:
-        dict_msg = eval(comitee_head_message)
+        dict_msg = eval(committee_head_message)
         # определяем куда идти дальше
         way_key = list(dict_msg.keys())[0]
         # если есть ключ определяет ноду
@@ -204,23 +204,23 @@ async def make_decision(state: State):
     return {"messages": [decision]}
 
 graph_builder = StateGraph(State)
-graph_builder.add_node("comitee_head", comitee_head)
+graph_builder.add_node("committee_head", committee_head)
 graph_builder.add_node("law_member", ask_law)
 graph_builder.add_node("reputation_member", ask_reputation)
 graph_builder.add_node("credit_manager", ask_credit)
 graph_builder.add_node("make_decision", make_decision)
 
-graph_builder.add_edge(START, "comitee_head")
+graph_builder.add_edge(START, "committee_head")
 graph_builder.add_conditional_edges(
-    "comitee_head",
+    "committee_head",
     router,
     {"law": "law_member",
      "reputation": "reputation_member",
      "credit": 'credit_manager',
      'decision': "make_decision"})
-graph_builder.add_edge('law_member', "comitee_head")
-graph_builder.add_edge('reputation_member', "comitee_head")
-graph_builder.add_edge('credit_manager', "comitee_head")
+graph_builder.add_edge('law_member', "committee_head")
+graph_builder.add_edge('reputation_member', "committee_head")
+graph_builder.add_edge('credit_manager', "committee_head")
 graph_builder.add_edge("make_decision", END)
 graph = graph_builder.compile()
 
@@ -230,7 +230,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # начальное состояние графа
     state = {
-        "messages": prompts_comitee_head,
+        "messages": prompts_committee_head,
         "num_qs": 0,
         "bot": context.bot,
         "chat_id": chat_id

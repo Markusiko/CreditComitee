@@ -49,4 +49,4 @@ vector_store = FAISS(
     index_to_docstore_id={},
 )
 vector_store.add_documents(documents=splitted_docs)
-vector_store.save_local("./data/faiss_comitee_bot")
+vector_store.save_local("./data/faiss_committee_bot")
