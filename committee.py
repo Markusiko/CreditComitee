@@ -25,7 +25,10 @@ def preprocess_text(text: str) -> str:
     Преобразует текст, чтобы его можно было отразить в TG-боте
     """
     text = text.replace('**', '*')
-    text = text.replace('_', '\_')
+    special_chars = '_[]()~`>#+=|{}!'
+
+    for char in special_chars:
+        text = text.replace(char, f'\\{char}')
 
     return text
 
