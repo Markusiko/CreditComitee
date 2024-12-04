@@ -20,6 +20,16 @@ load_dotenv()
 NUM_Q_THRESHOLD = 10  # сколько максимум вопросов задаст председатель
 
 
+def preprocess_text(text: str) -> str:
+    """
+    Преобразует текст, чтобы его можно было отразить в TG-боте
+    """
+    text = text.replace('**', '*')
+    text = text.replace('_', '\_')
+
+    return text
+
+
 def escape_markdown_v2(text: str) -> str:
     """
     Экранирует все специальные символы для MarkdownV2 в Telegram.
@@ -112,28 +122,39 @@ async def router(state: State):
         if way_key in ['law', 'reputation', 'decision', 'credit']:
             if way_key == 'law':
                 await bot.send_message(chat_id=chat_id,
-                                       text='*Вопрос Председателя Юристу:* ' + dict_msg[way_key],
-                                       parse_mode='Markdown')
+                                       text='*Вопрос Председателя Юристу:* ' + preprocess_text(dict_msg[way_key]),
+                                       parse_mode='Markdown'
+                                       )
             elif way_key == 'reputation':
                 await bot.send_message(chat_id=chat_id,
-                                       text='*Вопрос Председателя Представителю Подразделения Безопасности:* ' + dict_msg[way_key],
-                                       parse_mode='Markdown')
+                                       text='*Вопрос Председателя Представителю Подразделения Безопасности:* '\
+                                            + preprocess_text(dict_msg[way_key]),
+                                       parse_mode='Markdown'
+                                       )
             elif way_key == 'credit':
                 await bot.send_message(chat_id=chat_id,
-                                       text='*Вопрос Председателя Кредитному Менеджеру:* ' + dict_msg[way_key],
-                                       parse_mode='Markdown')
+                                       text='*Вопрос Председателя Кредитному Менеджеру:* ' + \
+                                            preprocess_text(dict_msg[way_key]),
+                                       parse_mode='Markdown'
+                                       )
             elif way_key == 'decision':
-                await bot.send_message(chat_id=chat_id, text="*Переход к формированию заключения КО*",
-                                       parse_mode='Markdown')
+                await bot.send_message(chat_id=chat_id,
+                                       text="*Переход к формированию заключения КО*",
+                                       parse_mode='Markdown'
+                                       )
             return way_key
         # если непонятно, куда идти, принимаем решение
         else:
-            await bot.send_message(chat_id=chat_id, text="*Переход к формированию заключения КО*",
-                                   parse_mode='Markdown')
+            await bot.send_message(chat_id=chat_id,
+                                   text="*Переход к формированию заключения КО*",
+                                   parse_mode='Markdown'
+                                   )
             return 'decision'
     except:
-        await bot.send_message(chat_id=chat_id, text="*Переход к формированию заключения КО*",
-                               parse_mode='Markdown')
+        await bot.send_message(chat_id=chat_id,
+                               text="*Переход к формированию заключения КО*",
+                               parse_mode='Markdown'
+                               )
         return 'decision'
 
 
@@ -147,7 +168,10 @@ async def ask_law(state: State):
 
     answer = agents_dict['law_member'].invoke({"input": query})
     message = f"*Ответ Юриста:* {answer['output']}"
-    await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+    await bot.send_message(chat_id=chat_id,
+                           text=message,
+                           parse_mode='Markdown'
+                           )
 
     return {"messages": [HumanMessage('Ответ Юриста: ' + answer['output'])]}
 
@@ -161,8 +185,11 @@ async def ask_reputation(state: State):
     query = eval(state["messages"][-1].content)['reputation']
 
     answer = agents_dict['reputation_member'].invoke({"input": query})
-    message = f"*Ответ Представителя Подразделения Безопасности:* {answer['output']}"
-    await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+    message = f"*Ответ Представителя Подразделения Безопасности:* {preprocess_text(answer['output'])}"
+    await bot.send_message(chat_id=chat_id,
+                           text=message,
+                           parse_mode='Markdown'
+                           )
 
     return {"messages": [HumanMessage('Ответ Представителя Подразделения Безопасности: '
                                       + answer['output'])]}
@@ -177,8 +204,11 @@ async def ask_credit(state: State):
     query = eval(state["messages"][-1].content)['credit']
 
     answer = agents_dict['credit_manager'].invoke({"input": query})
-    message = f"*Ответ Кредитного менеджера:* {answer['output']}"
-    await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+    message = f"*Ответ Кредитного менеджера:* {preprocess_text(answer['output'])}"
+    await bot.send_message(chat_id=chat_id,
+                           text=message,
+                           parse_mode='Markdown'
+                           )
 
     return {"messages": [HumanMessage('Ответ Кредитного менеджера: '
                                       + answer['output'])]}
@@ -197,7 +227,7 @@ async def make_decision(state: State):
     decision = llm.invoke(messages_for_decision)
 
     await bot.send_message(chat_id=chat_id,
-                           text='*Итоговое решение:*\n' + decision.content,
+                           text='*Итоговое решение:*\n' + preprocess_text(decision.content),
                            parse_mode='Markdown'
                            )
 
